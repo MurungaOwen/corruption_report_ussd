@@ -1,5 +1,5 @@
 """for use who proceed with english"""
-from ..calculations import verify_official, track_report, report_incident
+from calculations import verify_official, track_report, report_incident
 
 
 def english_menu():
@@ -8,7 +8,7 @@ def english_menu():
 def english_flow(text, phone_number):
     """ English flow for the USSD service. """
         #english chosen
-    if text == "1*":
+    if text == "1":
         response = english_menu()
     elif text == "1*1":
         response = "CON Enter the government official's work ID:"

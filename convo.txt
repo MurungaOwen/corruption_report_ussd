@@ -1,0 +1,67 @@
+User: *USSD#
+System: CON Choose your language:
+1. English
+2. Kiswahili
+
+User: 1 -->English chosen
+System: CON Welcome to the Anti-Corruption USSD System
+1. Verify Government Official
+2. Report Corruption
+3. Track Report Status
+
+User: 1*1
+System: CON Enter the government official's work ID: (1*1)
+
+User: 1*1*<officerID>
+System: END <name> (Officer) is a verified government official.
+
+User: *USSD#
+System: CON Choose your language:
+1. English
+2. Kiswahili
+
+User: 2 <kiswahili chosen>
+System: CON Karibu kwenye Mfumo wa Kupambana na Ufisadi
+1. Thibitisha Afisa wa Serikali
+2. Ripoti Ufisadi
+3. Fuatilia Hali ya Ripoti
+
+User: 2
+System: CON Tafadhali elezea tukio la ufisadi:
+
+User: Bribery at the local office
+System: END Tukio la ufisadi limeripotiwa. Kitambulisho cha ripoti ni 1.
+
+User: 123456
+System: CON Chagua lugha:
+1. English
+2. Kiswahili
+
+User: 1
+System: CON Welcome to the Anti-Corruption USSD System
+1. Verify Government Official
+2. Report Corruption
+3. Track Report Status
+
+User: 3
+System: CON Enter your report ID to track status:
+
+User: 1
+System: END Report 1 status: Pending.
+
+User: 123456
+System: CON Chagua lugha:
+1. English
+2. Kiswahili
+
+User: 2
+System: CON Karibu kwenye Mfumo wa Kupambana na Ufisadi
+1. Thibitisha Afisa wa Serikali
+2. Ripoti Ufisadi
+3. Fuatilia Hali ya Ripoti
+
+User: 3
+System: CON Weka kitambulisho chako cha ripoti kufuatilia hali:
+
+User: 1
+System: END Hali ya ripoti 1: Pending.
