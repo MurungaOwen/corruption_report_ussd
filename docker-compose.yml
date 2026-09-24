@@ -1,0 +1,24 @@
+services:
+  ussdgov:
+    build: .
+    image: ussdgov:local
+    ports:
+      - "8080:8080"
+    environment:
+      ENVIRONMENT: production
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      JWT_SECRET: ${JWT_SECRET:?set a real JWT_SECRET in .env}
+      PHONE_PEPPER: ${PHONE_PEPPER:?set a real PHONE_PEPPER in .env}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@ussd.local}
+    volumes:
+      - ussd_data:/data
+    healthcheck:
+      test: ["CMD", "/server", "healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  ussd_data:

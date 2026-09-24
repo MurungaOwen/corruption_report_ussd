@@ -1,0 +1,22 @@
+# Build artifacts
+/bin/
+/dist/
+*.exe
+
+# Runtime data — never commit the database or uploaded files
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Environment
+.env
+.env.local
+
+# Go
+/vendor/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

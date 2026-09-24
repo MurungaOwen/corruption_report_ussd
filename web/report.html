@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report Corruption — Kenya Integrity Line</title>
+<meta name="description" content="Report a corruption incident, optionally naming the official involved and attaching photo evidence.">
+<link rel="stylesheet" href="/assets/theme.css">
+<script src="https://unpkg.com/vue@3.4.31/dist/vue.global.prod.js"></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" style="color:inherit"><span class="brand-mark">KI</span> Kenya Integrity Line</a>
+    <div class="nav-links">
+      <a href="/verify">Verify an Official</a>
+      <a href="/report" class="active">Report Corruption</a>
+      <a href="/track">Track a Report</a>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="container">
+  <div v-if="!result" class="stack" style="margin-top:24px;">
+    <div>
+      <h1>Report Corruption</h1>
+      <p>Tell us what happened. You can stay anonymous — a phone number is optional and is only used if investigators need to reach you.</p>
+    </div>
+
+    <form class="card stack" @submit.prevent="submit">
+      <div class="field">
+        <label for="desc">What happened? <span style="color:var(--c-danger)">*</span></label>
+        <textarea id="desc" v-model="description" required placeholder="Who was involved, what did they ask for, where and when did it happen?" rows="6"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="workid">Official's work ID (optional, if known)</label>
+        <input id="workid" type="text" v-model.trim="workId" @input="lookupOfficial" placeholder="e.g. NPS-88213">
+        <div v-if="officialPreview" class="row" style="margin-top:10px; background:var(--c-surface-2); padding:8px 12px; border-radius:6px;">
+          <img class="official-photo official-photo-sm" :src="officialPreview.photo_url || ''" alt="">
+          <div style="font-size:13px">
+            <strong>{{ officialPreview.name }}</strong> — {{ officialPreview.position }}<br>
+            <span :class="'pill pill-' + officialPreview.status">{{ officialPreview.status }}</span>
+          </div>
+        </div>
+        <div v-else-if="workId && officialChecked" class="hint">No matching official found — the report will still be filed, unlinked.</div>
+      </div>
+
+      <div class="field">
+        <label for="phone">Your phone number (optional)</label>
+        <input id="phone" type="tel" v-model.trim="phone" placeholder="07XXXXXXXX">
+      </div>
+
+      <div class="field">
+        <label for="files">Attach photo evidence (optional, up to 6 images)</label>
+        <input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple @change="onFiles">
+        <div class="hint">{{ files.length }} file(s) selected. JPEG, PNG, or WebP only.</div>
+      </div>
+
+      <div v-if="error" class="banner banner-danger">{{ error }}</div>
+
+      <button class="btn-primary btn-block" type="submit" :disabled="submitting || !description">
+        <span v-if="submitting" class="spinner"></span> Submit Report
+      </button>
+      <p class="hint" style="text-align:center; margin:0">No smartphone right now? Dial the USSD code from any phone instead.</p>
+    </form>
+  </div>
+
+  <div v-else class="card stack" style="margin-top:24px;">
+    <div class="banner banner-success">Report received.</div>
+    <h2 style="margin:0">Your report ID</h2>
+    <div style="font-family: ui-monospace, monospace; font-size:20px; font-weight:700;">{{ result.report_id }}</div>
+    <p>Save this ID — you'll need it to <a :href="'/track?id=' + result.report_id">track your report's status</a>. There's no login, so this ID is the only way to check back.</p>
+    <p v-if="result.evidence_attached === 0">
+      Want to add photos later? Visit <a :href="result.evidence_upload">{{ result.evidence_upload }}</a> with code <strong>{{ result.evidence_code }}</strong> within 72 hours.
+    </p>
+    <a class="btn btn-secondary" href="/">Back to home</a>
+  </div>
+</div>
+
+<script>
+const { createApp, ref } = Vue;
+createApp({
+  setup() {
+    const description = ref('');
+    const workId = ref('');
+    const phone = ref('');
+    const files = ref([]);
+    const officialPreview = ref(null);
+    const officialChecked = ref(false);
+    const submitting = ref(false);
+    const error = ref('');
+    const result = ref(null);
+    let lookupTimer = null;
+
+    function onFiles(e) {
+      files.value = Array.from(e.target.files || []).slice(0, 6);
+    }
+
+    function lookupOfficial() {
+      clearTimeout(lookupTimer);
+      officialPreview.value = null;
+      officialChecked.value = false;
+      if (!workId.value) return;
+      lookupTimer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/v1/public/officials/' + encodeURIComponent(workId.value));
+          officialChecked.value = true;
+          if (res.ok) officialPreview.value = await res.json();
+        } catch (e) { /* ignore */ }
+      }, 400);
+    }
+
+    async function submit() {
+      error.value = '';
+      submitting.value = true;
+      try {
+        const form = new FormData();
+        form.append('description', description.value);
+        if (workId.value) form.append('official_work_id', workId.value);
+        if (phone.value) form.append('phone', phone.value);
+        files.value.forEach(f => form.append('files', f));
+
+        const res = await fetch('/api/v1/public/reports', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) { error.value = data.error || 'Could not submit report.'; return; }
+        result.value = data;
+      } catch (e) {
+        error.value = 'Network error — please check your connection and try again.';
+      } finally {
+        submitting.value = false;
+      }
+    }
+
+    return { description, workId, phone, files, officialPreview, officialChecked, submitting, error, result, onFiles, lookupOfficial, submit };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
