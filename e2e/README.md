@@ -61,6 +61,17 @@ mirrored in `cmd/e2eseed/main.go` — keep the two in sync if either changes.
   status, uploading a photo, issuing an ID-card token — each confirmed
   from the citizen-facing verification page too, not just the admin table.
 
+## Capturing screenshots
+
+`screenshot.js` is a standalone script (not part of the test run) that
+walks the same key journeys and saves a numbered PNG per screen — useful
+for demos or a visual review without reading test code. Point it at a
+running, seeded server:
+
+```bash
+cd e2e && E2E_BASE_URL=http://localhost:8097 node screenshot.js ./screenshots
+```
+
 ## Notes
 
 - `workers: 1`, `fullyParallel: false` — tests share server-side state
