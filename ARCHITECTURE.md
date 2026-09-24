@@ -114,12 +114,24 @@ UI. This is a policy decision from MANIFESTO.md §6, not an afterthought.
 
 ## The admin portal
 
-`web/index.html` is a single static file, Vue 3 loaded from a CDN
-(`<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js">`), no
-build step, no npm install, no bundler. The Go server serves it directly
-from `/`. It talks to the JSON API under `/api/v1/*` with a bearer JWT
-stored in `localStorage`. This keeps the deployment story identical to the
-backend: one binary, `scp` it, run it.
+Every page under `web/` is a static file, Vue 3 loaded from
+`web/assets/vue.global.prod.js` — **vendored into the repo, not fetched
+from a CDN at runtime.** No build step, no npm install, no bundler for the
+app itself. The Go server serves it directly from `/`. It talks to the
+JSON API under `/api/v1/*` with a bearer JWT stored in `localStorage`.
+This keeps the deployment story identical to the backend: one binary plus
+one directory, `scp` them, run it.
+
+Vendoring Vue instead of loading it from unpkg/jsdelivr at runtime is a
+deliberate reliability decision, not a style preference: a live UAT run
+against this system inside a network with a restrictive egress allowlist
+(exactly the kind a government IT department runs) demonstrated that a
+CDN-loaded script fails silently in the browser — the page loads, but
+nothing on it works, because `Vue` is never defined and no error surfaces
+to an end user. A perfectly healthy Go backend behind a broken frontend is
+still a broken system. Re-vendor with `npm pack vue@<version>` and copy
+`package/dist/vue.global.prod.js` over the existing file if it ever needs
+updating; never re-add a `<script src="https://...">` CDN reference.
 
 ## Anti-impersonation defense in depth
 

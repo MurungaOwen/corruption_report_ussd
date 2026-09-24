@@ -20,3 +20,9 @@
 .DS_Store
 .idea/
 .vscode/
+
+# Playwright UAT suite (e2e/) — its own dependency tree and run artifacts
+e2e/node_modules/
+e2e/test-results/
+e2e/report/
+e2e/playwright-report/

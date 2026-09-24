@@ -118,7 +118,7 @@ internal/phone          phone number hashing/display policy
 internal/httpx           shared HTTP helpers: retry/backoff, rate limiting, timeouts
 internal/logging          structured logging + request IDs
 internal/config             environment-based configuration
-web/                          citizen site + admin SPA (Vue 3 via CDN, no build step)
+web/                          citizen site + admin SPA (Vue 3 vendored locally, no build step, no CDN dependency)
 ```
 
 ## Documents worth reading before changing anything

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Portal — Kenya Integrity Line</title>
 <link rel="stylesheet" href="/assets/theme.css">
-<script src="https://unpkg.com/vue@3.4.31/dist/vue.global.prod.js"></script>
+<script src="/assets/vue.global.prod.js"></script>
 <style>
   .shell { display: flex; min-height: 100vh; }
   .sidebar {
@@ -112,7 +112,7 @@
         <div class="row between wrap">
           <h1 style="margin:0">Reports</h1>
           <div class="row">
-            <select v-model="reportFilter" @change="loadReports">
+            <select v-model="reportFilter" @change="loadReports" aria-label="Filter by status">
               <option value="">All statuses</option>
               <option value="pending">Pending</option>
               <option value="under_review">Under review</option>
@@ -152,12 +152,12 @@
 
         <form v-if="newOfficialOpen && rank(user.role) >= rank('admin')" class="card stack" @submit.prevent="createOfficial">
           <div class="row wrap">
-            <div class="field" style="flex:1; min-width:160px;"><label>Work ID</label><input type="text" v-model.trim="newOfficial.work_id" required></div>
-            <div class="field" style="flex:1; min-width:160px;"><label>Name</label><input type="text" v-model.trim="newOfficial.name" required></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-workid">Work ID</label><input id="of-workid" type="text" v-model.trim="newOfficial.work_id" required></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-name">Name</label><input id="of-name" type="text" v-model.trim="newOfficial.name" required></div>
           </div>
           <div class="row wrap">
-            <div class="field" style="flex:1; min-width:160px;"><label>Position</label><input type="text" v-model.trim="newOfficial.position" required></div>
-            <div class="field" style="flex:1; min-width:160px;"><label>Department</label><input type="text" v-model.trim="newOfficial.department"></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-position">Position</label><input id="of-position" type="text" v-model.trim="newOfficial.position" required></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-department">Department</label><input id="of-department" type="text" v-model.trim="newOfficial.department"></div>
           </div>
           <button class="btn-primary" type="submit" style="align-self:start">Register</button>
         </form>
@@ -175,7 +175,7 @@
                 <td><span class="pill" :class="'pill-' + o.status">{{ officialStatusLabel(o.status) }}</span></td>
                 <td>
                   <div v-if="rank(user.role) >= rank('admin')" class="row" style="gap:6px">
-                    <select @change="e => changeOfficialStatus(o, e.target.value)" :value="o.status" style="width:auto; padding:4px 8px; font-size:12px;">
+                    <select @change="e => changeOfficialStatus(o, e.target.value)" :value="o.status" :aria-label="'Status for ' + o.work_id" style="width:auto; padding:4px 8px; font-size:12px;">
                       <option value="unverified">Unverified</option>
                       <option value="verified">Verified</option>
                       <option value="under_investigation">Investigation</option>
@@ -227,14 +227,14 @@
         </div>
         <form v-if="newUserOpen" class="card stack" @submit.prevent="createUser">
           <div class="row wrap">
-            <div class="field" style="flex:1; min-width:160px;"><label>Email</label><input type="email" v-model.trim="newUser.email" required></div>
-            <div class="field" style="flex:1; min-width:160px;"><label>Name</label><input type="text" v-model.trim="newUser.name"></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="nu-email">Email</label><input id="nu-email" type="email" v-model.trim="newUser.email" required></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="nu-name">Name</label><input id="nu-name" type="text" v-model.trim="newUser.name"></div>
           </div>
           <div class="row wrap">
-            <div class="field" style="flex:1; min-width:160px;"><label>Temporary password (min 10 chars)</label><input type="text" v-model="newUser.password" required minlength="10"></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="nu-password">Temporary password (min 10 chars)</label><input id="nu-password" type="text" v-model="newUser.password" required minlength="10"></div>
             <div class="field" style="flex:1; min-width:160px;">
-              <label>Role</label>
-              <select v-model="newUser.role">
+              <label for="nu-role">Role</label>
+              <select id="nu-role" v-model="newUser.role">
                 <option value="viewer">Viewer</option>
                 <option value="officer">Officer</option>
                 <option value="admin">Admin</option>
@@ -272,7 +272,7 @@
       <template v-if="rank(user.role) >= rank('officer')">
       <h3>Update status</h3>
       <div class="row wrap">
-        <select v-model="statusUpdate.status" style="flex:1; min-width:140px;">
+        <select v-model="statusUpdate.status" aria-label="New status" style="flex:1; min-width:140px;">
           <option value="pending">Pending</option>
           <option value="under_review">Under review</option>
           <option value="resolved">Resolved</option>

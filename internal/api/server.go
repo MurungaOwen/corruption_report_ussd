@@ -100,7 +100,15 @@ func (s *Server) Handler() http.Handler {
 	// --- Static assets + citizen homepage ---
 	mux.Handle("/", http.FileServer(http.Dir(s.webDir)))
 
-	loginLimiter := httpx.NewRateLimiter(0.2, 5) // ~1 attempt / 5s sustained, burst 5
+	// The login limiter is IP-keyed, and IP-keyed limits have a real tension:
+	// a busy government office can put many legitimate staff behind one
+	// shared NAT address. A tight burst (an earlier value of burst=5 here)
+	// measurably locked out legitimate users after a handful of normal
+	// logins in a short window — caught by the UAT suite in e2e/, not
+	// hypothetically. 60/min sustained with a burst of 15 still meaningfully
+	// bounds a brute-force script (combined with bcrypt's own ~100ms+ cost
+	// per attempt as a second layer) without punishing a shared office.
+	loginLimiter := httpx.NewRateLimiter(1, 15)
 	publicLimiter := httpx.NewRateLimiter(2, 20) // generous but bounded
 
 	var handler http.Handler = mux
