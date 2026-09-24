@@ -113,7 +113,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) rateLimitPaths(next http.Handler, loginLimiter, publicLimiter *httpx.RateLimiter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key := httpx.ClientIP(r)
+		key := httpx.ClientIP(r, s.cfg.TrustProxyHeaders)
 		switch {
 		case r.URL.Path == "/api/v1/auth/login":
 			if !loginLimiter.Allow(key) {

@@ -2,7 +2,9 @@ package httpx
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -106,12 +108,31 @@ func (rl *RateLimiter) Middleware(keyFunc func(*http.Request) string) func(http.
 	}
 }
 
-// ClientIP extracts a best-effort client identifier, preferring a
-// reverse-proxy header if present (typical when this sits behind nginx/an
-// aggregator gateway) and falling back to RemoteAddr.
-func ClientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		return fwd
+// ClientIP extracts a best-effort client identifier for rate limiting and
+// verification-spike detection. trustProxyHeaders must be true only when
+// this process sits behind a reverse proxy that itself sets (overwrites)
+// X-Forwarded-For — otherwise any client can put anything in that header
+// and either defeat rate limiting or forge distinct "requesters" for the
+// anti-impersonation spike signal. See config.Config.TrustProxyHeaders.
+func ClientIP(r *http.Request, trustProxyHeaders bool) string {
+	if trustProxyHeaders {
+		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+			// The header can be a client-added chain "real, proxy1, proxy2";
+			// the leftmost entry is the original client as the nearest
+			// trusted proxy recorded it.
+			if i := strings.IndexByte(fwd, ','); i >= 0 {
+				fwd = fwd[:i]
+			}
+			if ip := strings.TrimSpace(fwd); ip != "" {
+				return ip
+			}
+		}
+	}
+	// RemoteAddr is "ip:port" — the port is a new random value on every
+	// connection, so keying on the raw string would put every single
+	// request in its own bucket and silently disable rate limiting.
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
 	}
 	return r.RemoteAddr
 }

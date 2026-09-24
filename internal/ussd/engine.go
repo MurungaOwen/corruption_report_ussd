@@ -155,7 +155,7 @@ func (e *Engine) fileReport(ctx context.Context, lang string, s Strings, rawPhon
 		Channel:        "ussd",
 		IdempotencyKey: sessionIdempotencyKey(sessionID, text),
 	}
-	code, err := e.store.CreateReport(ctx, r)
+	code, err := e.store.CreateReport(ctx, r, e.cfg.EvidenceWindow)
 	if err != nil {
 		return "", err
 	}

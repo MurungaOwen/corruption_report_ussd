@@ -39,8 +39,9 @@ type Store interface {
 
 	// Reports. CreateReport also generates and returns the plaintext
 	// one-time evidence code (only ever available at creation time — only
-	// its hash is persisted).
-	CreateReport(ctx context.Context, r *domain.Report) (evidenceCode string, err error)
+	// its hash is persisted). evidenceWindow controls how long that code
+	// stays valid; callers pass config.Config.EvidenceWindow.
+	CreateReport(ctx context.Context, r *domain.Report, evidenceWindow time.Duration) (evidenceCode string, err error)
 	GetReportByID(ctx context.Context, id int64) (*domain.Report, error)
 	GetReportByPublicID(ctx context.Context, publicID string) (*domain.Report, error)
 	ListReports(ctx context.Context, f ReportFilter) ([]domain.Report, int, error)

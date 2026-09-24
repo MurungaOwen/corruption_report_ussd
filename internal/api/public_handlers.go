@@ -36,7 +36,7 @@ func (s *Server) handlePublicGetOfficial(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	requesterKey := phone.Hash(s.cfg.PhonePepper, httpx.ClientIP(r))
+	requesterKey := phone.Hash(s.cfg.PhonePepper, httpx.ClientIP(r, s.cfg.TrustProxyHeaders))
 	_ = s.store.RecordVerification(r.Context(), domain.VerificationEvent{
 		WorkID: workID, Source: domain.VerifyViaWeb, RequesterKey: requesterKey,
 	})
@@ -98,7 +98,7 @@ func (s *Server) handlePublicImpersonationReport(w http.ResponseWriter, r *http.
 	if key := r.Header.Get("Idempotency-Key"); key != "" {
 		rpt.IdempotencyKey = "impersonation:" + key
 	}
-	if _, err := s.store.CreateReport(r.Context(), rpt); err != nil {
+	if _, err := s.store.CreateReport(r.Context(), rpt, s.cfg.EvidenceWindow); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "could not file report")
 		return
 	}
@@ -161,7 +161,7 @@ func (s *Server) handlePublicCreateReport(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	code, err := s.store.CreateReport(r.Context(), rpt)
+	code, err := s.store.CreateReport(r.Context(), rpt, s.cfg.EvidenceWindow)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "could not file report")
 		return

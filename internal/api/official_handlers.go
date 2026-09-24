@@ -159,6 +159,10 @@ func (s *Server) handleIssueCardToken(w http.ResponseWriter, r *http.Request) {
 	}
 	var req issueCardTokenRequest
 	_ = httpx.DecodeJSON(r, &req) // optional body
+	if req.TTLDays < 0 {
+		httpx.Error(w, http.StatusBadRequest, "ttl_days must not be negative")
+		return
+	}
 
 	ttl := s.cfg.IDCardTTL
 	if req.TTLDays > 0 {

@@ -32,12 +32,15 @@ import (
 // transaction as the state change" guarantee described in
 // ARCHITECTURE.md, enforced by the database itself rather than by
 // caller discipline.
-func (s *Store) CreateReport(ctx context.Context, r *domain.Report) (string, error) {
+func (s *Store) CreateReport(ctx context.Context, r *domain.Report, evidenceWindow time.Duration) (string, error) {
 	if r.Status == "" {
 		r.Status = domain.ReportPending
 	}
 	if r.ReportType == "" {
 		r.ReportType = domain.ReportTypeCorruption
+	}
+	if evidenceWindow <= 0 {
+		evidenceWindow = 72 * time.Hour
 	}
 	code, err := randomDigits(6)
 	if err != nil {
@@ -45,7 +48,7 @@ func (s *Store) CreateReport(ctx context.Context, r *domain.Report) (string, err
 	}
 	codeHash := hashCode(code)
 	nowTime := time.Now().UTC()
-	expires := nowTime.Add(72 * time.Hour)
+	expires := nowTime.Add(evidenceWindow)
 	now := nowTime.Format(time.RFC3339)
 
 	tx, err := s.db.BeginTx(ctx, nil)

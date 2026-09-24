@@ -33,6 +33,15 @@ type Config struct {
 	// Environment is "development" or "production"; gates things like
 	// verbose error bodies and the seeded default admin account.
 	Environment string
+	// TrustProxyHeaders controls whether X-Forwarded-For is trusted to
+	// identify a client's real IP for rate limiting and verification-spike
+	// detection. It must stay false unless this process sits behind a
+	// reverse proxy that overwrites (never appends to) that header —
+	// otherwise any client can spoof it to defeat rate limiting outright,
+	// or to manipulate the anti-impersonation spike signal itself (fake
+	// many "distinct requesters" to falsely flag a real officer, or reuse
+	// one value to hide an actual scam run behind a botnet).
+	TrustProxyHeaders bool
 	// PublicBaseURL is the externally reachable base URL of this server,
 	// used to build the verification and evidence-upload links sent back
 	// to citizens over USSD (e.g. "https://ussd.example.go.ke").
@@ -72,6 +81,7 @@ func Load() Config {
 		VerifyAnomalyThreshold: envIntOr("VERIFY_ANOMALY_THRESHOLD", 5),
 		VerifyAnomalyWindow:    envDurationOr("VERIFY_ANOMALY_WINDOW", 15*time.Minute),
 		IDCardTTL:              envDurationOr("IDCARD_TTL", 90*24*time.Hour),
+		TrustProxyHeaders:      envBoolOr("TRUST_PROXY_HEADERS", false),
 	}
 	return cfg
 }
@@ -116,6 +126,15 @@ func envIntOr(key string, fallback int) int {
 	if v, ok := os.LookupEnv(key); ok && v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func envBoolOr(key string, fallback bool) bool {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return fallback
