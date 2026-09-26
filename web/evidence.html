@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add Photo Evidence — Kenya Integrity Line</title>
+<link rel="stylesheet" href="/assets/theme.css">
+<script src="/assets/vue.global.prod.js"></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" style="color:inherit"><span class="brand-mark">KI</span> Kenya Integrity Line</a>
+    <div class="nav-links"><a href="/track">Track a Report</a></div>
+  </div>
+</div>
+
+<div id="app" class="container">
+  <div class="stack" style="margin-top:24px;">
+    <div>
+      <h1>Add Photo Evidence</h1>
+      <p>For report <strong style="font-family: ui-monospace, monospace;">{{ publicId }}</strong>. Enter the one-time code you received and attach up to 6 photos. The code was sent with your report confirmation and expires 72 hours after filing.</p>
+    </div>
+
+    <form v-if="!success" class="card stack" @submit.prevent="submit">
+      <div class="field">
+        <label for="code">One-time code</label>
+        <input id="code" type="text" v-model.trim="code" inputmode="numeric" placeholder="6-digit code" style="font-family: ui-monospace, monospace;">
+      </div>
+      <div class="field">
+        <label for="files">Photos</label>
+        <input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple capture="environment" @change="onFiles">
+        <div class="hint">{{ files.length }} file(s) selected. JPEG, PNG, or WebP only.</div>
+      </div>
+      <div v-if="error" class="banner banner-danger">{{ error }}</div>
+      <button class="btn-primary btn-block" type="submit" :disabled="submitting || !code || files.length === 0">
+        <span v-if="submitting" class="spinner"></span> Upload
+      </button>
+    </form>
+
+    <div v-else class="card stack">
+      <div class="banner banner-success">{{ success.attached }} file(s) attached.</div>
+      <p style="margin:0">You can attach up to {{ success.remaining }} more before reaching the limit for this report.</p>
+      <a class="btn btn-secondary" :href="'/track?id=' + publicId">Track this report</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const publicId = ref('');
+    const code = ref('');
+    const files = ref([]);
+    const submitting = ref(false);
+    const error = ref('');
+    const success = ref(null);
+
+    function onFiles(e) { files.value = Array.from(e.target.files || []).slice(0, 6); }
+
+    async function submit() {
+      error.value = ''; submitting.value = true;
+      try {
+        const form = new FormData();
+        form.append('code', code.value);
+        files.value.forEach(f => form.append('files', f));
+        const res = await fetch('/api/v1/public/reports/' + encodeURIComponent(publicId.value) + '/evidence', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) { error.value = data.error || 'Upload failed.'; return; }
+        success.value = data;
+      } catch (e) {
+        error.value = 'Network error — please try again.';
+      } finally {
+        submitting.value = false;
+      }
+    }
+
+    onMounted(() => {
+      const m = window.location.pathname.match(/^\/e\/(.+)$/);
+      publicId.value = m ? decodeURIComponent(m[1]) : '';
+    });
+
+    return { publicId, code, files, submitting, error, success, onFiles, submit };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

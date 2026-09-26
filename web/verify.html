@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify a Government Official — Kenya Integrity Line</title>
+<meta name="description" content="Check a government official's photo, name, and verification status before trusting them.">
+<link rel="stylesheet" href="/assets/theme.css">
+<script src="/assets/vue.global.prod.js"></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" style="color:inherit"><span class="brand-mark">KI</span> Kenya Integrity Line</a>
+    <div class="nav-links">
+      <a href="/verify" class="active">Verify an Official</a>
+      <a href="/report">Report Corruption</a>
+      <a href="/track">Track a Report</a>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="container">
+  <div class="stack" style="margin-top:24px;">
+    <div>
+      <h1>Verify a Government Official</h1>
+      <p>Enter the work ID, badge number, or service number printed on their ID card. Always compare the photo shown here to the person in front of you — a real officer's number can still be memorized and reused by someone else.</p>
+    </div>
+
+    <div class="card">
+      <form class="row" @submit.prevent="search">
+        <div style="flex:1">
+          <label for="wid">Work / Badge ID</label>
+          <input id="wid" type="text" v-model.trim="workIdInput" placeholder="e.g. NPS-88213" autocapitalize="characters">
+        </div>
+        <button class="btn-primary" style="margin-top:22px" type="submit" :disabled="loading">
+          <span v-if="loading" class="spinner"></span> Check
+        </button>
+      </form>
+    </div>
+
+    <div v-if="notFound" class="card">
+      <div class="banner banner-danger">No official found with that ID.</div>
+      <p style="margin-top:12px">This doesn't necessarily mean the person is impersonating an officer — the record may not be digitized yet. But if you're uneasy, you can still <a href="/report">file a report</a> describing what happened.</p>
+    </div>
+
+    <div v-if="official" class="card">
+      <div v-if="official.high_scrutiny" class="banner banner-warn" style="margin-bottom:16px;">
+        ⚠ This ID has been checked unusually often recently. Exercise extra caution and compare the photo carefully.
+      </div>
+
+      <div class="row wrap" style="align-items:flex-start; gap:20px;">
+        <img class="official-photo official-photo-lg" :src="official.photo_url || placeholderPhoto" alt="Reference photo on file">
+        <div style="flex:1; min-width:220px;">
+          <div class="row between" style="margin-bottom:8px;">
+            <h2 style="margin:0">{{ official.name }}</h2>
+            <span class="pill" :class="'pill-' + official.status">{{ statusLabel(official.status) }}</span>
+          </div>
+          <p style="margin:0 0 4px"><strong>{{ official.position }}</strong></p>
+          <p style="margin:0 0 4px">{{ official.department }}</p>
+          <p style="margin:0; font-family: ui-monospace, monospace; color: var(--c-text-3)">{{ official.work_id }}</p>
+
+          <div v-if="official.card_valid !== null && official.card_valid !== undefined" style="margin-top:12px">
+            <span class="banner" :class="official.card_valid ? 'banner-success' : 'banner-danger'" style="display:inline-block">
+              {{ official.card_valid ? '✓ Scanned ID card token is currently valid' : '✗ Scanned ID card token has expired or is invalid — ask for a reissued card' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="!official.photo_url" class="banner banner-warn" style="margin-top:16px;">
+        No reference photo is on file for this official yet. Rely on the status shown and, where possible, ask them to also confirm at their duty station.
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--c-border); margin:20px 0;">
+
+      <div v-if="!reportOpen">
+        <p style="margin-bottom:12px">Does the person in front of you <strong>not match this photo</strong>, or is something else off?</p>
+        <button class="btn-danger" @click="reportOpen = true">This doesn't match — report it</button>
+      </div>
+      <div v-else class="stack">
+        <h3>Report a possible impersonation</h3>
+        <div class="field">
+          <label for="desc">What happened? (optional but helpful)</label>
+          <textarea id="desc" v-model="impDescription" placeholder="Where and when did this happen? What did they ask for?"></textarea>
+        </div>
+        <div class="field">
+          <label for="phone">Your phone number (optional)</label>
+          <input id="phone" type="tel" v-model.trim="impPhone" placeholder="07XXXXXXXX">
+          <div class="hint">Only used if investigators need to reach you. Leave blank to stay anonymous.</div>
+        </div>
+        <div class="row">
+          <button class="btn-danger" @click="submitImpersonation" :disabled="submitting">
+            <span v-if="submitting" class="spinner"></span> Submit report
+          </button>
+          <button class="btn-secondary" @click="reportOpen = false">Cancel</button>
+        </div>
+        <div v-if="impResult" class="banner banner-success">
+          Report filed. Your report ID is <strong>{{ impResult }}</strong> — save it to track status.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const workIdInput = ref('');
+    const official = ref(null);
+    const notFound = ref(false);
+    const loading = ref(false);
+    const reportOpen = ref(false);
+    const impDescription = ref('');
+    const impPhone = ref('');
+    const impResult = ref('');
+    const submitting = ref(false);
+    const placeholderPhoto = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="%23F0F2F6"/><text x="50%" y="50%" font-size="13" fill="%238892A4" text-anchor="middle" dy=".3em">No photo on file</text></svg>'
+    );
+
+    function statusLabel(s) {
+      return { verified: 'Verified', unverified: 'Unverified', under_investigation: 'Under investigation' }[s] || s;
+    }
+
+    async function doLookup(workId, token) {
+      loading.value = true;
+      notFound.value = false;
+      official.value = null;
+      reportOpen.value = false;
+      impResult.value = '';
+      try {
+        let url = '/api/v1/public/officials/' + encodeURIComponent(workId);
+        if (token) url += '?t=' + encodeURIComponent(token);
+        const res = await fetch(url);
+        if (res.status === 404) { notFound.value = true; return; }
+        if (!res.ok) throw new Error('lookup failed');
+        official.value = await res.json();
+      } catch (e) {
+        notFound.value = true;
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    function search() {
+      if (!workIdInput.value) return;
+      history.replaceState(null, '', '/v/' + encodeURIComponent(workIdInput.value));
+      doLookup(workIdInput.value, '');
+    }
+
+    async function submitImpersonation() {
+      if (!official.value) return;
+      submitting.value = true;
+      try {
+        const res = await fetch('/api/v1/public/officials/' + encodeURIComponent(official.value.work_id) + '/impersonation-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: impDescription.value, phone: impPhone.value }),
+        });
+        const data = await res.json();
+        if (res.ok) { impResult.value = data.report_id; }
+      } finally {
+        submitting.value = false;
+      }
+    }
+
+    onMounted(() => {
+      const path = window.location.pathname;
+      const match = path.match(/^\/v\/(.+)$/);
+      if (match) {
+        const workId = decodeURIComponent(match[1]);
+        workIdInput.value = workId;
+        const token = new URLSearchParams(window.location.search).get('t') || '';
+        doLookup(workId, token);
+      }
+    });
+
+    return { workIdInput, official, notFound, loading, search, statusLabel, placeholderPhoto,
+      reportOpen, impDescription, impPhone, impResult, submitting, submitImpersonation };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

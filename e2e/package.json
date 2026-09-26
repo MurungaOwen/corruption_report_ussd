@@ -1,0 +1,11 @@
+{
+  "name": "ussdgov-e2e",
+  "private": true,
+  "description": "Playwright UAT suite against the running Go server + web portal. Not part of the shipped application.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  }
+}

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track a Report — Kenya Integrity Line</title>
+<link rel="stylesheet" href="/assets/theme.css">
+<script src="/assets/vue.global.prod.js"></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" style="color:inherit"><span class="brand-mark">KI</span> Kenya Integrity Line</a>
+    <div class="nav-links">
+      <a href="/verify">Verify an Official</a>
+      <a href="/report">Report Corruption</a>
+      <a href="/track" class="active">Track a Report</a>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="container">
+  <div class="stack" style="margin-top:24px;">
+    <div>
+      <h1>Track a Report</h1>
+      <p>Enter the report ID you received from USSD or the web report form.</p>
+    </div>
+
+    <div class="card">
+      <form class="row" @submit.prevent="check">
+        <div style="flex:1">
+          <label for="rid">Report ID</label>
+          <input id="rid" type="text" v-model.trim="reportId" placeholder="RPT-2026-ABC123" style="font-family: ui-monospace, monospace;">
+        </div>
+        <button class="btn-primary" style="margin-top:22px" type="submit" :disabled="loading">
+          <span v-if="loading" class="spinner"></span> Check status
+        </button>
+      </form>
+    </div>
+
+    <div v-if="notFound" class="banner banner-danger">No report found with that ID. Double-check it and try again.</div>
+
+    <div v-if="report" class="card">
+      <div class="row between">
+        <h3 style="margin:0">{{ report.public_id }}</h3>
+        <span class="pill" :class="'pill-' + report.status">{{ statusLabel(report.status) }}</span>
+      </div>
+      <p style="margin:8px 0 0">Filed {{ new Date(report.created_at).toLocaleString() }}</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const reportId = ref('');
+    const report = ref(null);
+    const notFound = ref(false);
+    const loading = ref(false);
+
+    function statusLabel(s) {
+      return { pending: 'Pending review', under_review: 'Under review', resolved: 'Resolved', dismissed: 'Dismissed' }[s] || s;
+    }
+
+    async function check() {
+      if (!reportId.value) return;
+      loading.value = true; notFound.value = false; report.value = null;
+      try {
+        const res = await fetch('/api/v1/public/reports/' + encodeURIComponent(reportId.value) + '/status');
+        if (res.status === 404) { notFound.value = true; return; }
+        if (!res.ok) throw new Error();
+        report.value = await res.json();
+      } catch (e) {
+        notFound.value = true;
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    onMounted(() => {
+      const id = new URLSearchParams(window.location.search).get('id');
+      if (id) { reportId.value = id; check(); }
+    });
+
+    return { reportId, report, notFound, loading, check, statusLabel };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Portal — Kenya Integrity Line</title>
+<link rel="stylesheet" href="/assets/theme.css">
+<script src="/assets/vue.global.prod.js"></script>
+<style>
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 220px; flex-shrink: 0; background: var(--c-surface);
+    border-right: 1px solid var(--c-border); padding: 16px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .sidebar a, .sidebar button.navlink {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 6px; color: var(--c-text-2);
+    font-weight: 600; font-size: 14px; cursor: pointer;
+    border: none; background: none; text-align: left; width: 100%; font-family: inherit;
+  }
+  .sidebar a:hover, .sidebar button.navlink:hover { background: var(--c-surface-2); text-decoration: none; }
+  .sidebar .active { background: var(--c-primary-50); color: var(--c-primary); border-left: 3px solid var(--c-primary); padding-left: 9px; }
+  .main { flex: 1; min-width: 0; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+  .stat-tile { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; padding: 16px; }
+  .stat-tile .num { font-size: 28px; font-weight: 700; }
+  .stat-tile .label { font-size: 12px; color: var(--c-text-3); }
+  .bar-row { display: grid; grid-template-columns: 140px 1fr 48px; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 8px; }
+  .bar-track { background: var(--c-surface-2); border-radius: 4px; height: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(16,23,40,0.45); display: flex; justify-content: flex-end; z-index: 50; }
+  .modal-panel { width: min(560px, 100%); background: var(--c-bg); height: 100%; overflow-y: auto; padding: 24px; box-shadow: var(--shadow-1); }
+  .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .thumb-grid img { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid var(--c-border); }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; overflow-x: auto; border-right:none; border-bottom:1px solid var(--c-border); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ===== Login ===== -->
+  <div v-if="!user" class="container" style="max-width:380px; margin-top:80px;">
+    <div class="card stack">
+      <div class="brand" style="justify-content:center; font-size:18px;"><span class="brand-mark">KI</span> Staff Portal</div>
+      <form class="stack" @submit.prevent="login">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" v-model.trim="loginEmail" required autofocus>
+        </div>
+        <div class="field">
+          <label for="pw">Password</label>
+          <input id="pw" type="password" v-model="loginPassword" required>
+        </div>
+        <div v-if="loginError" class="banner banner-danger">{{ loginError }}</div>
+        <button class="btn-primary btn-block" type="submit" :disabled="loggingIn">
+          <span v-if="loggingIn" class="spinner"></span> Sign in
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== App shell ===== -->
+  <div v-else class="shell">
+    <div class="sidebar">
+      <div class="brand" style="padding:8px 12px 16px;"><span class="brand-mark">KI</span> Staff Portal</div>
+      <button class="navlink" :class="{active: view==='dashboard'}" @click="go('dashboard')">Dashboard</button>
+      <button class="navlink" :class="{active: view==='reports'}" @click="go('reports')">Reports</button>
+      <button class="navlink" :class="{active: view==='officials'}" @click="go('officials')">Officials</button>
+      <button class="navlink" v-if="rank(user.role) >= rank('admin')" :class="{active: view==='audit'}" @click="go('audit')">Audit Log</button>
+      <button class="navlink" v-if="rank(user.role) >= rank('admin')" :class="{active: view==='users'}" @click="go('users')">Staff Accounts</button>
+      <div style="flex:1"></div>
+      <div style="padding:10px 12px; font-size:12px; color:var(--c-text-3);">{{ user.email }} · {{ user.role }}</div>
+      <button class="navlink" @click="logout">Log out</button>
+    </div>
+
+    <div class="main container-wide">
+      <!-- Dashboard -->
+      <div v-if="view === 'dashboard'" class="stack">
+        <h1>Dashboard</h1>
+        <div v-if="stats" class="stat-grid">
+          <div class="stat-tile"><div class="num">{{ stats.total_reports }}</div><div class="label">Total reports</div></div>
+          <div class="stat-tile"><div class="num">{{ stats.reports_by_status.pending || 0 }}</div><div class="label">Pending review</div></div>
+          <div class="stat-tile"><div class="num">{{ stats.reports_last_7_days }}</div><div class="label">Reports, last 7 days</div></div>
+          <div class="stat-tile"><div class="num">{{ stats.total_officials }}</div><div class="label">Registered officials</div></div>
+        </div>
+
+        <div class="row wrap" style="align-items:stretch; gap:16px;">
+          <div class="card" style="flex:1; min-width:280px;">
+            <h3>Reports by status</h3>
+            <div v-for="s in reportStatusOrder" :key="s" class="bar-row">
+              <span>{{ statusLabel(s) }}</span>
+              <div class="bar-track"><div class="bar-fill" :style="barStyle(s, 'report')"></div></div>
+              <span style="text-align:right">{{ (stats && stats.reports_by_status[s]) || 0 }}</span>
+            </div>
+          </div>
+          <div class="card" style="flex:1; min-width:280px;">
+            <h3>Officials by status</h3>
+            <div v-for="s in officialStatusOrder" :key="s" class="bar-row">
+              <span>{{ officialStatusLabel(s) }}</span>
+              <div class="bar-track"><div class="bar-fill" :style="officialBarStyle(s)"></div></div>
+              <span style="text-align:right">{{ (stats && stats.officials_by_status[s]) || 0 }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports -->
+      <div v-if="view === 'reports'" class="stack">
+        <div class="row between wrap">
+          <h1 style="margin:0">Reports</h1>
+          <div class="row">
+            <select v-model="reportFilter" @change="loadReports" aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="under_review">Under review</option>
+              <option value="resolved">Resolved</option>
+              <option value="dismissed">Dismissed</option>
+            </select>
+            <input type="text" v-model="reportQuery" @keyup.enter="loadReports" placeholder="Search description or ID…" style="width:220px">
+            <button class="btn-secondary btn-sm" @click="loadReports">Search</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0; overflow-x:auto;">
+          <table v-if="reports.length">
+            <thead><tr><th>ID</th><th>Type</th><th>Channel</th><th>Description</th><th>Status</th><th>Filed</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="r in reports" :key="r.id" style="cursor:pointer" @click="openReport(r.id)">
+                <td style="font-family:ui-monospace,monospace">{{ r.public_id }}</td>
+                <td>{{ r.report_type }}</td>
+                <td>{{ r.channel }}</td>
+                <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.description }}</td>
+                <td><span class="pill" :class="'pill-' + r.status">{{ statusLabel(r.status) }}</span></td>
+                <td>{{ new Date(r.created_at).toLocaleDateString() }}</td>
+                <td><a href="#" @click.stop.prevent="openReport(r.id)">View</a></td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty-state">No reports match this filter yet.</div>
+        </div>
+      </div>
+
+      <!-- Officials -->
+      <div v-if="view === 'officials'" class="stack">
+        <div class="row between wrap">
+          <h1 style="margin:0">Officials</h1>
+          <button v-if="rank(user.role) >= rank('admin')" class="btn-primary btn-sm" @click="newOfficialOpen = !newOfficialOpen">{{ newOfficialOpen ? 'Cancel' : '+ Register Official' }}</button>
+        </div>
+
+        <form v-if="newOfficialOpen && rank(user.role) >= rank('admin')" class="card stack" @submit.prevent="createOfficial">
+          <div class="row wrap">
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-workid">Work ID</label><input id="of-workid" type="text" v-model.trim="newOfficial.work_id" required></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-name">Name</label><input id="of-name" type="text" v-model.trim="newOfficial.name" required></div>
+          </div>
+          <div class="row wrap">
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-position">Position</label><input id="of-position" type="text" v-model.trim="newOfficial.position" required></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="of-department">Department</label><input id="of-department" type="text" v-model.trim="newOfficial.department"></div>
+          </div>
+          <button class="btn-primary" type="submit" style="align-self:start">Register</button>
+        </form>
+
+        <div class="card" style="padding:0; overflow-x:auto;">
+          <table v-if="officials.length">
+            <thead><tr><th></th><th>Work ID</th><th>Name</th><th>Position</th><th>Department</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr v-for="o in officials" :key="o.id">
+                <td><img class="official-photo official-photo-sm" :src="o.photo_url || ''" alt=""></td>
+                <td style="font-family:ui-monospace,monospace">{{ o.work_id }}</td>
+                <td>{{ o.name }}</td>
+                <td>{{ o.position }}</td>
+                <td>{{ o.department }}</td>
+                <td><span class="pill" :class="'pill-' + o.status">{{ officialStatusLabel(o.status) }}</span></td>
+                <td>
+                  <div v-if="rank(user.role) >= rank('admin')" class="row" style="gap:6px">
+                    <select @change="e => changeOfficialStatus(o, e.target.value)" :value="o.status" :aria-label="'Status for ' + o.work_id" style="width:auto; padding:4px 8px; font-size:12px;">
+                      <option value="unverified">Unverified</option>
+                      <option value="verified">Verified</option>
+                      <option value="under_investigation">Investigation</option>
+                    </select>
+                    <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                      Photo
+                      <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="e => uploadPhoto(o, e)">
+                    </label>
+                    <button class="btn btn-secondary btn-sm" @click="issueCard(o)">ID card link</button>
+                  </div>
+                  <span v-else class="hint">View only</span>
+                  <div v-if="cardLinks[o.id]" class="hint" style="margin-top:6px; word-break:break-all;">
+                    <a :href="cardLinks[o.id]" target="_blank">{{ cardLinks[o.id] }}</a>
+                    <button class="btn btn-secondary btn-sm" style="margin-left:6px" @click="copyLink(o.id)">Copy</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty-state">No officials registered yet.</div>
+        </div>
+      </div>
+
+      <!-- Audit log -->
+      <div v-if="view === 'audit'" class="stack">
+        <h1>Audit Log</h1>
+        <div class="card" style="padding:0; overflow-x:auto;">
+          <table v-if="audit.length">
+            <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
+            <tbody>
+              <tr v-for="e in audit" :key="e.id">
+                <td>{{ new Date(e.created_at).toLocaleString() }}</td>
+                <td>{{ e.actor }}</td>
+                <td>{{ e.action }}</td>
+                <td>{{ e.target }}</td>
+                <td>{{ e.detail }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty-state">No audit events recorded yet.</div>
+        </div>
+      </div>
+
+      <!-- Users -->
+      <div v-if="view === 'users'" class="stack">
+        <div class="row between wrap">
+          <h1 style="margin:0">Staff Accounts</h1>
+          <button class="btn-primary btn-sm" @click="newUserOpen = !newUserOpen">{{ newUserOpen ? 'Cancel' : '+ New Account' }}</button>
+        </div>
+        <form v-if="newUserOpen" class="card stack" @submit.prevent="createUser">
+          <div class="row wrap">
+            <div class="field" style="flex:1; min-width:160px;"><label for="nu-email">Email</label><input id="nu-email" type="email" v-model.trim="newUser.email" required></div>
+            <div class="field" style="flex:1; min-width:160px;"><label for="nu-name">Name</label><input id="nu-name" type="text" v-model.trim="newUser.name"></div>
+          </div>
+          <div class="row wrap">
+            <div class="field" style="flex:1; min-width:160px;"><label for="nu-password">Temporary password (min 10 chars)</label><input id="nu-password" type="text" v-model="newUser.password" required minlength="10"></div>
+            <div class="field" style="flex:1; min-width:160px;">
+              <label for="nu-role">Role</label>
+              <select id="nu-role" v-model="newUser.role">
+                <option value="viewer">Viewer</option>
+                <option value="officer">Officer</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" type="submit" style="align-self:start">Create account</button>
+        </form>
+        <div class="card" style="padding:0; overflow-x:auto;">
+          <table>
+            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Created</th></tr></thead>
+            <tbody>
+              <tr v-for="u in users" :key="u.id">
+                <td>{{ u.email }}</td><td>{{ u.name }}</td><td>{{ u.role }}</td>
+                <td>{{ new Date(u.created_at).toLocaleDateString() }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report detail drawer -->
+  <div v-if="activeReport" class="modal-backdrop" @click.self="activeReport = null">
+    <div class="modal-panel stack">
+      <div class="row between">
+        <h2 style="margin:0; font-family:ui-monospace,monospace;">{{ activeReport.public_id }}</h2>
+        <button class="btn-secondary btn-sm" @click="activeReport = null">Close</button>
+      </div>
+      <span class="pill" :class="'pill-' + activeReport.status" style="align-self:start">{{ statusLabel(activeReport.status) }}</span>
+      <p><strong>Type:</strong> {{ activeReport.report_type }} · <strong>Channel:</strong> {{ activeReport.channel }} · <strong>Phone ends:</strong> {{ activeReport.phone_last4 || '—' }}</p>
+      <div class="card"><p style="margin:0; white-space:pre-wrap;">{{ activeReport.description }}</p></div>
+
+      <template v-if="rank(user.role) >= rank('officer')">
+      <h3>Update status</h3>
+      <div class="row wrap">
+        <select v-model="statusUpdate.status" aria-label="New status" style="flex:1; min-width:140px;">
+          <option value="pending">Pending</option>
+          <option value="under_review">Under review</option>
+          <option value="resolved">Resolved</option>
+          <option value="dismissed">Dismissed</option>
+        </select>
+        <input type="text" v-model="statusUpdate.reason" placeholder="Reason (optional)" style="flex:2; min-width:160px;">
+        <button class="btn-primary" @click="submitStatusUpdate">Update</button>
+      </div>
+      </template>
+
+      <h3>History</h3>
+      <div v-for="h in activeReportHistory" :key="h.id" class="row" style="font-size:13px; align-items:flex-start;">
+        <span style="color:var(--c-text-3); width:140px; flex-shrink:0;">{{ new Date(h.created_at).toLocaleString() }}</span>
+        <span>{{ h.from_status || 'filed' }} → <strong>{{ h.to_status }}</strong> by {{ h.actor }} <span v-if="h.reason">— {{ h.reason }}</span></span>
+      </div>
+
+      <h3>Evidence ({{ activeReportEvidence.length }})</h3>
+      <div v-if="activeReportEvidence.length" class="thumb-grid">
+        <img v-for="ev in activeReportEvidence" :key="ev.id" :src="evidenceBlobUrls[ev.id]" @click="evidenceBlobUrls[ev.id] && window.open(evidenceBlobUrls[ev.id])">
+      </div>
+      <div v-else class="hint">No evidence attached.</div>
+    </div>
+  </div>
+
+  <div class="toast-stack">
+    <div v-for="t in toasts" :key="t.id" class="toast">{{ t.msg }}</div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, onMounted, computed } = Vue;
+
+createApp({
+  setup() {
+    const user = ref(null);
+    const token = ref('');
+    const view = ref('dashboard');
+
+    const loginEmail = ref(''); const loginPassword = ref(''); const loginError = ref(''); const loggingIn = ref(false);
+
+    const stats = ref(null);
+    const reports = ref([]); const reportFilter = ref(''); const reportQuery = ref('');
+    const officials = ref([]); const newOfficialOpen = ref(false);
+    const newOfficial = reactive({ work_id: '', name: '', position: '', department: '' });
+    const audit = ref([]);
+    const users = ref([]); const newUserOpen = ref(false);
+    const newUser = reactive({ email: '', name: '', password: '', role: 'officer' });
+    const cardLinks = reactive({});
+    const toasts = ref([]);
+
+    const activeReport = ref(null);
+    const activeReportHistory = ref([]);
+    const activeReportEvidence = ref([]);
+    const evidenceBlobUrls = reactive({});
+    const statusUpdate = reactive({ status: '', reason: '' });
+
+    const reportStatusOrder = ['pending', 'under_review', 'resolved', 'dismissed'];
+    const officialStatusOrder = ['verified', 'unverified', 'under_investigation'];
+    const statusColors = { pending: '#B7791F', under_review: '#2B6CB0', resolved: '#1A7F52', dismissed: '#6B7280' };
+    const officialColors = { verified: '#1A7F52', unverified: '#B7791F', under_investigation: '#B42318' };
+
+    function statusLabel(s) { return { pending: 'Pending', under_review: 'Under review', resolved: 'Resolved', dismissed: 'Dismissed' }[s] || s; }
+    function officialStatusLabel(s) { return { verified: 'Verified', unverified: 'Unverified', under_investigation: 'Investigation' }[s] || s; }
+    function rank(r) { return { viewer: 1, officer: 2, admin: 3 }[r] || 0; }
+    function toast(msg) { const id = Date.now() + Math.random(); toasts.value.push({ id, msg }); setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id); }, 4000); }
+
+    function barStyle(status, kind) {
+      const total = stats.value ? Object.values(stats.value.reports_by_status).reduce((a, b) => a + b, 0) : 0;
+      const v = (stats.value && stats.value.reports_by_status[status]) || 0;
+      const pct = total ? (v / total) * 100 : 0;
+      return { width: pct + '%', background: statusColors[status] };
+    }
+    function officialBarStyle(status) {
+      const total = stats.value ? Object.values(stats.value.officials_by_status).reduce((a, b) => a + b, 0) : 0;
+      const v = (stats.value && stats.value.officials_by_status[status]) || 0;
+      const pct = total ? (v / total) * 100 : 0;
+      return { width: pct + '%', background: officialColors[status] };
+    }
+
+    async function api(path, opts = {}) {
+      opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token.value });
+      const res = await fetch(path, opts);
+      if (res.status === 401) { logout(); throw new Error('session expired'); }
+      return res;
+    }
+    async function apiJSON(path, opts = {}) {
+      if (opts.body && !(opts.body instanceof FormData)) {
+        opts.headers = Object.assign({}, opts.headers, { 'Content-Type': 'application/json' });
+      }
+      const res = await api(path, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'request failed');
+      return data;
+    }
+
+    async function login() {
+      loginError.value = ''; loggingIn.value = true;
+      try {
+        const res = await fetch('/api/v1/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: loginEmail.value, password: loginPassword.value }),
+        });
+        const data = await res.json();
+        if (!res.ok) { loginError.value = data.error || 'Login failed'; return; }
+        token.value = data.token; user.value = data.user;
+        localStorage.setItem('ki_token', data.token);
+        localStorage.setItem('ki_user', JSON.stringify(data.user));
+        await bootData();
+      } catch (e) {
+        loginError.value = 'Network error';
+      } finally {
+        loggingIn.value = false;
+      }
+    }
+    function logout() {
+      token.value = ''; user.value = null;
+      localStorage.removeItem('ki_token'); localStorage.removeItem('ki_user');
+    }
+
+    function go(v) { view.value = v; if (v === 'reports') loadReports(); if (v === 'officials') loadOfficials(); if (v === 'audit') loadAudit(); if (v === 'users') loadUsers(); }
+
+    async function loadStats() { stats.value = await apiJSON('/api/v1/stats'); }
+    async function loadReports() {
+      const params = new URLSearchParams();
+      if (reportFilter.value) params.set('status', reportFilter.value);
+      if (reportQuery.value) params.set('q', reportQuery.value);
+      const data = await apiJSON('/api/v1/reports?' + params.toString());
+      reports.value = data.reports || [];
+    }
+    async function loadOfficials() { const data = await apiJSON('/api/v1/officials'); officials.value = data.officials || []; }
+    async function loadAudit() { const data = await apiJSON('/api/v1/audit'); audit.value = data.events || []; }
+    async function loadUsers() { const data = await apiJSON('/api/v1/admin-users'); users.value = data.users || []; }
+
+    async function createOfficial() {
+      await apiJSON('/api/v1/officials', { method: 'POST', body: JSON.stringify(newOfficial) });
+      Object.assign(newOfficial, { work_id: '', name: '', position: '', department: '' });
+      newOfficialOpen.value = false;
+      toast('Official registered'); loadOfficials();
+    }
+    async function changeOfficialStatus(o, status) {
+      await apiJSON('/api/v1/officials/' + o.id + '/status', { method: 'PATCH', body: JSON.stringify({ status }) });
+      toast('Status updated'); loadOfficials();
+    }
+    async function uploadPhoto(o, e) {
+      const file = e.target.files[0]; if (!file) return;
+      const form = new FormData(); form.append('photo', file);
+      try { await apiJSON('/api/v1/officials/' + o.id + '/photo', { method: 'POST', body: form }); toast('Photo uploaded'); loadOfficials(); }
+      catch (err) { toast(err.message); }
+    }
+    async function issueCard(o) {
+      const data = await apiJSON('/api/v1/officials/' + o.id + '/idcard-token', { method: 'POST', body: JSON.stringify({}) });
+      cardLinks[o.id] = data.verify_url;
+    }
+    function copyLink(id) { navigator.clipboard.writeText(cardLinks[id]).then(() => toast('Link copied')); }
+
+    async function createUser() {
+      await apiJSON('/api/v1/admin-users', { method: 'POST', body: JSON.stringify(newUser) });
+      Object.assign(newUser, { email: '', name: '', password: '', role: 'officer' });
+      newUserOpen.value = false;
+      toast('Account created'); loadUsers();
+    }
+
+    async function openReport(id) {
+      const data = await apiJSON('/api/v1/reports/' + id);
+      activeReport.value = data;
+      activeReportHistory.value = data.history || [];
+      activeReportEvidence.value = data.evidence || [];
+      statusUpdate.status = data.status; statusUpdate.reason = '';
+      for (const k in evidenceBlobUrls) delete evidenceBlobUrls[k];
+      for (const ev of activeReportEvidence.value) {
+        api('/api/v1/reports/' + id + '/evidence/' + ev.id + '/file')
+          .then(r => r.blob()).then(b => { evidenceBlobUrls[ev.id] = URL.createObjectURL(b); });
+      }
+    }
+    async function submitStatusUpdate() {
+      if (!activeReport.value) return;
+      const updated = await apiJSON('/api/v1/reports/' + activeReport.value.id + '/status', { method: 'PATCH', body: JSON.stringify(statusUpdate) });
+      activeReport.value.status = updated.status;
+      toast('Report status updated');
+      loadReports(); openReport(activeReport.value.id);
+    }
+
+    async function bootData() { await Promise.all([loadStats(), loadReports(), loadOfficials()]); }
+
+    onMounted(() => {
+      const t = localStorage.getItem('ki_token'); const u = localStorage.getItem('ki_user');
+      if (t && u) { token.value = t; user.value = JSON.parse(u); bootData(); }
+    });
+
+    return {
+      user, loginEmail, loginPassword, loginError, loggingIn, login, logout, view, go, rank,
+      stats, reportStatusOrder, officialStatusOrder, barStyle, officialBarStyle,
+      reports, reportFilter, reportQuery, loadReports, statusLabel, officialStatusLabel,
+      officials, newOfficialOpen, newOfficial, createOfficial, changeOfficialStatus, uploadPhoto, issueCard, cardLinks, copyLink,
+      audit, users, newUserOpen, newUser, createUser,
+      activeReport, activeReportHistory, activeReportEvidence, evidenceBlobUrls, statusUpdate, openReport, submitStatusUpdate,
+      toasts,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
